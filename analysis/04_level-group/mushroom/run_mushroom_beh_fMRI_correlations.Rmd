@@ -1,0 +1,126 @@
+---
+title: "analysis_task-mushroom_correlations_beh_fMRI"
+author: "Lieke Hofmans"
+date: "2023-11-23"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warnings = FALSE)
+
+# packages (no idea which ones are actually necessary)
+library("ggplot2")
+library("tidyr")
+library("readr")
+library("dplyr")
+library("tidyverse")
+library("lmerTest")
+library("ggpubr")
+library("cocor")
+
+# directories
+setwd("P:/fMRI Projects/fMRI Project Mushroom Highschool/analysis")
+analysis_wd <- getwd()
+beh_dir_adults <- file.path("P:/fMRI Projects/fMRI Project Mushroom/bids/derivatives/beh/mushroom")
+beh_dir_adolescents <- file.path("P:/fMRI Projects/fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom")
+mri_dir <- file.path("P:/fMRI Projects/fMRI Project Mushroom Highschool/bids/derivatives/mri/group_level")
+
+
+source("summary_function.R")
+
+# load data
+df_adult_params <- read.csv(file.path(beh_dir_adults, "group_task-mushroom_preproc-trialwise-params_forfMRI_allTrials.csv"))
+df_adolescent_params <- read.csv(file.path(beh_dir_adolescents, "group_task-mushroom_preproc-trialwise-params_forfMRI_allTrials.csv"))
+df_params <- rbind(df_adult_params, df_adolescent_params)
+
+df_cluster_estimates <- read.table(file.path(mri_dir, "individual_peerConfidence_estimates_BOLD.csv"), sep = "", header = TRUE) # 3mm sphere around peak voxel in clusters as defined by model-based GLM, but betas from condition-based GLM
+
+
+# Combine datasets
+df <- merge(df_cluster_estimates, df_params, by = "sID", all.x = TRUE)
+df <- df[!duplicated(df$sID), ]
+
+```
+
+
+
+```{r correlate beta bold with parameters , warning=FALSE, fig.height= 4.2, fig.width=4.2}
+
+# Correlate mean BOLD contrast in clusters selected from masked flame1 analysis, per age group
+
+df$group <- ifelse(df$sID < 200, "adults", "adolescents")
+df_adults <- subset(df, group == "adults")
+df_adolescents <- subset(df, group == "adolescents")
+
+
+# Ventromedial PFC
+r_adults <- cor(df_adults$ventromedial_PFC, df_adults$theta_slope)
+r_adolescents <- cor(df_adolescents$ventromedial_PFC, df_adolescents$theta_slope)
+n_adults <- nrow(df_adults)
+n_adolescents <- nrow(df_adolescents)
+cocor_result <- cocor.indep.groups(r1.jk = r_adults,
+                                   r2.hm = r_adolescents,
+                                   n1 = n_adults,
+                                   n2 = n_adolescents,
+                                   alternative = "two.sided",
+                                   test = "fisher1925")
+p_diff <- cocor_result@fisher1925$p.value; p_diff
+
+  ggplot(data = df, aes(x = ventromedial_PFC, y = theta_slope, color = group)) +
+        geom_point() +
+        geom_smooth(method = "lm", size = 1) +
+        theme_classic(base_size = 16) +
+        ylab("theta slope") + 
+        xlab("BOLD estimate ventromedial PFC") + 
+        theme(legend.position = "none") +    
+        stat_cor(r.digits = 2, p.digits = 3) 
+        
+  
+# anterior medial PFC
+r_adults <- cor(df_adults$anteriormedial_PFC, df_adults$theta_slope)
+r_adolescents <- cor(df_adolescents$anteriormedial_PFC, df_adolescents$theta_slope)
+n_adults <- nrow(df_adults)
+n_adolescents <- nrow(df_adolescents)
+cocor_result <- cocor.indep.groups(r1.jk = r_adults,
+                                   r2.hm = r_adolescents,
+                                   n1 = n_adults,
+                                   n2 = n_adolescents,
+                                   alternative = "two.sided",
+                                   test = "fisher1925")
+p_diff <- cocor_result@fisher1925$p.value; p_diff
+
+  ggplot(data = df, aes(x = anteriormedial_PFC, y = theta_slope, color = group)) +
+        geom_point() +
+        geom_smooth(method = "lm", size = 1) +
+        theme_classic(base_size = 16) +
+        ylab("theta slope") + 
+        xlab("BOLD estimate anterior medial PFC") + 
+        theme(legend.position = "none") +     
+        stat_cor(r.digits = 2, p.digits = 3)
+  
+# midcingulate
+r_adults <- cor(df_adults$midcingulate_cortex, df_adults$theta_slope)
+r_adolescents <- cor(df_adolescents$midcingulate_cortex, df_adolescents$theta_slope)
+n_adults <- nrow(df_adults)
+n_adolescents <- nrow(df_adolescents)
+cocor_result <- cocor.indep.groups(r1.jk = r_adults,
+                                   r2.hm = r_adolescents,
+                                   n1 = n_adults,
+                                   n2 = n_adolescents,
+                                   alternative = "two.sided",
+                                   test = "fisher1925")
+p_diff <- cocor_result@fisher1925$p.value; p_diff  
+  
+  ggplot(data = df, aes(x = midcingulate_cortex, y = theta_slope, color = group)) +
+        geom_point() +
+        geom_smooth(method = "lm", size = 1) +
+        theme_classic(base_size = 16) +
+        ylab("theta slope") + 
+        xlab("BOLD estimate midcingulate cortex") + 
+        theme(legend.position = "none") +     
+        stat_cor(r.digits = 2, p.digits = 3)
+
+
+```

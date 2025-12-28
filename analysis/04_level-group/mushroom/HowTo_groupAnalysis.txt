@@ -1,0 +1,179 @@
+HOW TO RUN GROUP-LEVEL ANALYSIS
+
+(Below, you will see that the computational analyses are run before the model-free analyses.
+This is because the main script for the behavioral analysis also compares computational parameters between age group.
+Thus, the computational models generate input for this main behavioral script and needs to be run in advance.)
+
+1. RUN run_mushroom_compModel.R in R
+========================================================================================================
+
+It sources the data
+- group_task-mushroom_preproc-trialwise-ranefs.csv
+
+It sources the scripts
+- summary_function.R
+- model_specification.R (all models to run)
+- helper_functions.R
+
+It runs
+- model fitting
+- model comparison
+- calculates model-based own certainty and peer confidence
+- defines posterior predictives
+- plots modeled data vs actual data
+
+It outputs
+- results_fit_sample/subject_MX_fitE2: best fit for all parameters, for each participant and each model separately
+- results_pred/pred_MX_fitE2: runs model with estimated parameters and returns predicted "behavior", in terms of perceived blue and red mushrooms for self and peer
+
+
+2. RUN model_recovery_combinedGroups.R in R
+========================================================================================================
+
+It sources the data
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (data adolescents)
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (data adults)
+
+It sources the scripts
+- summary_function.R
+- model_specification.R (all models to run)
+- helper_functions.R
+
+It runs
+- model recovery procedure for all models
+- parameter recovery procedure for all models
+
+It outputs
+- results_sim/sim_generatedFrom_MX.txt: simulated task parameters based on individual parameter values
+- results_sim/combinedExperiments_fit_MX_dataGeneratedFromMX.txt: fitted parameter values
+
+
+3. RUN compute_modelBasedParameters_forFMRI_allTrials.R in R
+========================================================================================================
+
+It sources the data
+- group_task-mushroom_preproc-trialwise-allTrials.csv
+- subject_M3d_fitE2.txt (fitted parameter values)
+
+It runs
+- the combining of all behavioral mushroom data with computational parameters and parameter-based variables.
+
+It outputs
+- group_task-mushroom_preproc-trialwise-params_forfMRI_allTrials.csv (to be correlated with fMRI BOLD)
+
+
+4. RUN groupComparison.R in R
+========================================================================================================
+This runs all the model-free ananlyses on the mushroom task data.
+
+It sources the data
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (adolescent mushroom data)
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-practice_trialwise.csv (adolescent mushroom practice data)
+- fMRI Project Mushroom Highschool/analysis/participants_to_exclude.csv (adolescents to exclude)
+- fMRI Project Mushroom Highschool/bids/derivatives/qnr/demographics/group_demographics.csv (adolescent demographics data)
+- fMRI Project Mushroom Highschool/analysis/04_level-group/mushroom/results_fit_sample/subject_M3d_fitE2.txt (fitted parameter values adolescents)
+
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (adult mushroom data)
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-practice_trialwise.csv (adult mushroom practice data)
+- fMRI Project Mushroom/analysis/participants_to_exclude.csv (adults to exclude)
+- fMRI Project Mushroom/bids/derivatives/qnr/demographics/group_demographics.csv (adult demographics data)
+- fMRI Project Mushroom/analysis/04_level-group/mushroom/results_fit_sample/subject_M3d_fitE2.txt (fitted parameter values adults)
+
+It sources the scripts
+- summary_function.R
+- raincloud_plots.R
+
+It runs
+- descriptive plots across groups and adolescents vs adults
+- a mixed model on social information use across groups and adolescents vs adults
+- a wilcox test for the difference in computational parameters for adolescents vs adults
+- a mixed model with age as a continuous variable (sensitivity analysis)
+
+
+5. RUN groupComparison_include_anticonformity.R in R
+========================================================================================================
+This runs a model-free analysis on the mushroom task data, including trials with s<0 and s>1 (control analysis)
+
+It sources the data
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise_include_anticonformity.csv (adolescent mushroom data)
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise_include_anticonformity.csv (adult mushroom data)
+- fMRI Project Mushroom Highschool/bids/derivatives/qnr/demographics/group_demographics.csv (adolescent age data)
+- fMRI Project Mushroom/bids/derivatives/qnr/demographics/group_demographics.csv (adult age data)
+- participants_to_exclude.csv
+
+It runs
+- a mixed model on social information use, including trials with s < 0 and s > 1.
+
+
+6. RUN run_mushroom_BEAST_comparison.R in R
+========================================================================================================
+Compare social information use between adolescents and adults in the BEAST to see if this is in the same direction as for the mushroom task (control analysis) 
+
+It sources the data
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (adolescent mushroom data)
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise.csv (adult mushroom data)
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/BEAST/group_task-BEAST_preproc-trialwise.csv (adolescent BEAST data)
+- fMRI Project Mushroom/bids/derivatives/beh/BEAST/group_task-BEAST_preproc-trialwise.csv (adult BEAST data)
+- group_demographics.csv
+- participants_to_exclude.csv
+
+It sources the scripts
+- summary_function.R
+- raincloud_plots.R
+
+It runs
+- a t-test and lmer to test the age group difference in social information in both tasks separately
+- a correlation between social information use between the two tasks
+- an lmer to test the variance/noisiness of social information use in both tasks separately.
+
+
+========================================================================================================
+======================================= fMRI ANALYSES ==================================================
+========================================================================================================
+
+
+5. RUN lower level fMRI analyes (see how to in corresponding folder)
+========================================================================================================
+- 00_bidsConversion/MRI/scripts
+- 01_preprocessing/fMRI
+- 02_first_level/scripts
+- 03_second_level/scripts
+
+
+6. RUN groupLevel.sh in terminal
+========================================================================================================
+Within this script, you can define which steps you want to run:
+- running the actual analysis: this requires the .fsf files, which include all the parameters to run the GLMs
+  (groupLevel_entireGroup.sh = for both adults and adolescents)
+  (groupLevel_groupComparison.sh = adults vs adolescents)
+  (groupLevel_adults.sh = for both adults only)
+  (groupLevel_adolescents.sh = for adolescents only)
+- running masked or unmasked results
+- create the mask by combining all the different brain areas. 
+
+==> significant_clusters.xlsx are all significant clusters for all contrasts.
+
+
+7. RUN sphere_extraction_entireGroup.sh in terminal
+========================================================================================================
+For each subject and each contrast specified, the script create a group-level ROI mask (Z > 3.1, cluster-corrected), 
+and then identifies the peak voxel for each individual within this mask. 
+Around each subject-specific peak, it defines a 3 mm spherical ROI and extracts the mean beta values. 
+(average beta values from condition-based GLM, within 3mm sphere around peak voxel in clusters as defined by model-based GLM) 
+It outputs these average beta values to fMRI Project Mushroom Highschool/bids/derivatives/mri/group_level/individual_peerConfidence_estimates_BOLD.csv
+
+8. RUN run_mushroom_beh_fMRI_correlations.Rmd in R
+========================================================================================================
+It sources the individual parameter values
+- fMRI Project Mushroom Highschool/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise-params_forfMRI_allTrials.csv (data adolescents)
+- fMRI Project Mushroom/bids/derivatives/beh/mushroom/group_task-mushroom_preproc-trialwise-params_forfMRI_allTrials.csv (data adults)
+- fMRI Project Mushroom Highschool/bids/derivatives/mri/group_level/individual_peerConfidence_estimates_BOLD.csv (average beta values from condition-based GLM, within 3mm sphere around peak voxel in clusters as defined by model-based GLM)
+
+It sources the scripts
+- summary_function.R
+
+It runs
+- Correlate mean BOLD contrast in clusters selected from masked flame1 analysis, per age group, with their respective parameter value(theta slope) for the effect of peer confidence.
+
+It outputs
+- Correlational figures (but does not save them)
