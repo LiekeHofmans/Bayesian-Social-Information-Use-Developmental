@@ -1,0 +1,1 @@
+<?php define ("PROJECTID","e3765g29044_");define ("PATH","resources/");define ("FIRSTPAGE","stage326669");define ("PROJECTPW","8476137cfb82070efbdd9abd46982880");define ("GAMEID","29044");define ("COURSEID","3765");
