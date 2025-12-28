@@ -1,0 +1,31 @@
+exclude_beh,exclude_T1,exclude_fmri,exclude_mushroom,reason
+239,239,239,239,Did not finish session
+347,347,347,347,Did not finish session
+NA,NA,202,202,>70% stay trials
+NA,NA,215,215,>70% stay trials
+NA,NA,216,216,>70% stay trials
+NA,NA,246,246,>70% stay trials
+NA,NA,306,306,>70% stay trials
+NA,NA,337,337,>70% stay trials
+NA,NA,202,NA,Failed fmriprep QC
+NA,NA,203,NA,Failed fmriprep QC
+NA,NA,216,NA,Failed fmriprep QC
+NA,NA,218,NA,Failed fmriprep QC
+NA,NA,219,NA,Failed fmriprep QC
+NA,NA,223,NA,Failed fmriprep QC
+NA,NA,226,NA,Failed fmriprep QC
+NA,NA,236,NA,Failed fmriprep QC
+NA,NA,246,NA,Failed fmriprep QC
+NA,NA,255,NA,Failed fmriprep QC
+NA,NA,285,NA,Failed fmriprep QC
+NA,NA,292,NA,Failed fmriprep QC
+NA,NA,297,NA,Failed fmriprep QC
+NA,NA,306,NA,Failed fmriprep QC
+NA,NA,320,NA,Failed fmriprep QC
+NA,NA,329,NA,Failed fmriprep QC
+NA,NA,331,NA,Failed fmriprep QC
+NA,NA,336,NA,Failed fmriprep QC
+NA,NA,347,NA,Failed fmriprep QC
+NA,NA,358,NA,Failed fmriprep QC
+NA,NA,364,NA,Failed fmriprep QC
+NA,NA,366,NA,Failed fmriprep QC

@@ -1,0 +1,470 @@
+---
+title: "run_preprocessing_task-mushroom"
+author: "Lieke Hofmans"
+date: "2023-07-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warnings = FALSE)
+rm(list = ls())
+
+# packages
+list.of.packages <- c("tidyverse", "dplyr", "ggplot2", "tidyr", "readr", "viridis")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readr)
+library(viridis)
+
+
+# directories
+project_wd <- "P:/fMRI Projects/fMRI Project Mushroom Highschool"
+setwd(project_wd)
+
+analysis_dir <- file.path(project_wd, "analysis")
+bids_dir <- file.path(project_wd, "bids")
+bids_group_dir <- file.path(bids_dir, "group")
+derivatives_mushroom_dir <- file.path(bids_dir, "derivatives/beh/mushroom")
+
+# import functions
+source(file.path(analysis_dir, "summary_function.R"))
+
+```
+
+```{r import data}
+
+# import which participants need to be excluded
+participants_to_exclude <- read.csv(file.path(analysis_dir, "participants_to_exclude.csv"))
+# import mushroom data
+list_subjects <- list.dirs(path = bids_dir, full.names = TRUE, recursive = FALSE)
+list_subjects <- list_subjects[grepl(".*sub-[2-8][0-9]{2}", list_subjects)]
+list_subjects <- list_subjects[!abs(parse_number(list_subjects)) %in% participants_to_exclude$exclude_beh]
+
+# practice run
+df_prac <- data.frame()
+for (iSubject in list_subjects){
+  mushroomfiles <- list.files(path = file.path(iSubject, "beh"), pattern = "sub-.*_task-mushroom_run-prac.*beh.{0,2}.csv", full.names = TRUE)
+  for (ifile in mushroomfiles) {
+    if (length(ifile) > 0) {
+      if (file.size(ifile) > 2000){
+        pracdata <- read.csv(ifile, na.strings = c("", "NA"))
+        names(pracdata) <- sub(".*\\.\\.", "", names(pracdata)) # correct encoding of column names
+        # keep only columns with relevant behavioral task data
+        pracdata_filtered <- pracdata[,c("run", "estimation1.rating", "confidence_own.rating", "estimation2.rating", "estimate_peer", "confidence_peer", "estimation1.rt", "confidence_own.rt", "estimation2.rt", "trueRatio", "seen_ratio", "nTotal", "fillerTrial", "cross_hair.ITI", "nMushrooms", "nBlue", "nRed")]
+        colnames(pracdata_filtered) <- c("run", "estimate1", "confidence_rating", "estimate2", "estimate_peer", "confidence_peer", "estimate1_rt", "confidence_rt", "estimate2_rt", "true_ratio", "seen_ratio", "nTotal", "filler_trial", "ITI", "nMushrooms", "nBlue", "nRed")
+        pracdata_filtered <- cbind(sID = unique(pracdata$participant), trial_number = c(1:nrow(pracdata_filtered)), trial_number_run = c(1:nrow(pracdata_filtered)), pracdata_filtered)
+        df_prac <- rbind(df_prac, pracdata_filtered)
+      }
+    }
+  }
+} 
+pracdata <- df_prac
+
+# fMRI runs
+df_all <- data.frame()
+for (iSubject in list_subjects){
+  mushroomfiles <- list.files(path = file.path(iSubject, "beh"), pattern = "sub-.*_task-mushroom_run-[1-3].*beh.*.csv", full.names = TRUE)
+  for (ifile in mushroomfiles) {
+    if (length(ifile) > 0) {
+      if (file.size(ifile) > 2000){
+        mushroomdata <- read.csv(ifile, na.strings = c("", "NA"))
+        names(mushroomdata) <- sub(".*\\.\\.", "", names(mushroomdata)) # correct encoding of column names
+        # keep only columns with relevant behavioral task data
+        mushroomdata_filtered <- mushroomdata[,c("run", "estimation1.rating", "estimation2.rating", "estimate_peer", "confidence_peer", "estimation1.rt", "estimation2.rt", "trueRatio", "seen_ratio", "nTotal", "fillerTrial", "cross_hair.ITI", "nMushrooms", "nBlue", "nRed")]
+       colnames(mushroomdata_filtered) <- c("run", "estimate1", "estimate2", "estimate_peer", "confidence_peer", "estimate1_rt", "estimate2_rt", "true_ratio", "seen_ratio", "nTotal", "filler_trial", "ITI", "nMushrooms", "nBlue", "nRed")
+        mushroomdata_filtered <- cbind(sID = unique(mushroomdata$participant), trial_number = c(1:nrow(mushroomdata_filtered)), trial_number_run = c(1:nrow(mushroomdata_filtered)), mushroomdata_filtered)
+        if (unique(mushroomdata_filtered$run) > 1) mushroomdata_filtered$trial_number <- mushroomdata_filtered$trial_number + tail(df_all$trial_number, n = 1)
+        df_all <- rbind(df_all, mushroomdata_filtered)
+      }
+    }
+  }
+} 
+mushroomdata <- df_all
+
+# remove incomplete datasets
+trials_pp <- mushroomdata %>% 
+  dplyr::count(sID) %>%
+  filter(n == 75)
+mushroomdata <- mushroomdata[mushroomdata$sID %in% trials_pp$sID,] 
+pracdata <- pracdata[pracdata$sID %in% trials_pp$sID,] 
+```
+
+
+```{r preprocess mushroom data, fig.width=25, fig.height=40}
+
+# calculate social information use s = (E2 - E1) / (X - E1)
+mushroomdata$s <- (mushroomdata$estimate2 - mushroomdata$estimate1) / (mushroomdata$estimate_peer - mushroomdata$estimate1)
+
+# Add participants’ updating strategies: 0, 0<s>1, 1
+mushroomdata$strategy <- ifelse(mushroomdata$s <= 0, "stay", ifelse(mushroomdata$s >= 1, "copy", "compromise"))
+
+# Add mean confidence rating for each certainty level
+prac_summ <- pracdata %>%
+  group_by(sID, nTotal) %>%
+  summarise_at(vars(confidence_rating), list(confidence_rating = ~ mean(., na.rm = TRUE)))
+
+mushroomdata <- mushroomdata %>%
+  left_join(prac_summ, by = c("sID", "nTotal"))
+
+
+
+# EXCLUSIONS
+
+# i. qualitatively check if they adhered to task instructions
+    # E1
+    summ <- summarySE(mushroomdata, measurevar="estimate1", groupvars=c("seen_ratio", "nTotal", "sID")) # summarize data to retrieve mean and SE
+    ggplot(data = summ, aes(x = seen_ratio, y = estimate1, color = as.factor(nTotal))) +
+      facet_wrap(vars(sID),ncol = 8) +
+      geom_abline(intercept = 0, slope = 100) +
+      geom_abline(intercept = 50, slope = 0) +
+      geom_jitter(data = mushroomdata, alpha=0.5, width = 0.01, height = 0.01) +
+      geom_smooth(method = "lm") +
+      coord_cartesian(ylim=c(0,100)) +
+      scale_color_viridis(discrete=TRUE) +
+      theme_classic(base_size = 16) +
+      ggtitle("estimate 1")
+    
+    
+    # E2
+    summ <- summarySE(mushroomdata, measurevar="estimate2", groupvars=c("seen_ratio", "nTotal", "sID")) # summarize data to retrieve mean and SE
+    ggplot(data = summ, aes(x = seen_ratio, y = estimate2, color = as.factor(nTotal))) +
+      facet_wrap(vars(sID),ncol = 8) +
+      geom_abline(intercept = 0, slope = 100) +
+      geom_abline(intercept = 50, slope = 0) +
+      geom_jitter(data = mushroomdata, alpha=0.5, width = 0.01, height = 0.01) +
+      geom_smooth(method = "lm") +
+      coord_cartesian(ylim=c(0,100)) +
+      scale_color_viridis(discrete=TRUE) +
+      theme_classic(base_size = 16) +
+      ggtitle("estimate 2")
+
+to_exclude <- c() # qualitative check by Lieke Hofmans
+data_clean <- mushroomdata[!mushroomdata$sID %in% to_exclude,] # -0 participants  = 70 pp with 5100 trials
+
+# ii. filler trials
+data_clean <- data_clean[data_clean$filler_trial==0,] 
+
+# iii. trials where they were too late or where either estimate 1 or estimate 2 RT > 20 sec
+data_clean$estimate1_rt <- as.numeric(data_clean$estimate1_rt)
+data_clean$estimate2_rt <- as.numeric(data_clean$estimate2_rt)
+data_clean <- data_clean[!is.na(data_clean$estimate2_rt),] # 1 trial, trials = 4199
+data_clean <- data_clean[data_clean$estimate1_rt <= 20 & data_clean$estimate2_rt <= 20,] # - 20 = 4179 trials
+
+# iv. trials with either estimate 1 or estimate 2 RT < 0.2 sec.
+data_clean <- data_clean[data_clean$estimate1_rt >= 0.2 & data_clean$estimate2_rt >= 0.2,] # - 0 = 4179 trials
+
+# v. trials without suitable social info (suitable = 15-18 mushrooms from estimate 1, but could be slightly lower (13-14) in case E1 was very close to 0  or 1)
+data_clean <- data_clean[abs(data_clean$estimate1 - data_clean$estimate_peer) > 12 & abs(data_clean$estimate1 - data_clean$estimate_peer) < 19,] # - 8 = 4171 trials
+
+
+# vi. trials with either estimate 1 or estimate 2 > 3SD from mean, grouped per certainty level and ratio
+means_SDs_1 <- summarySE(data_clean, measurevar="estimate1", groupvars=c("nTotal", "true_ratio"))
+means_SDs_2 <- summarySE(data_clean, measurevar="estimate2", groupvars=c("nTotal", "true_ratio"))
+
+for(i_trial in 1:length(data_clean$trial_number)) {
+    data_clean$trial_filter[i_trial] <- ifelse(abs(data_clean$estimate1[i_trial] - means_SDs_1$estimate1[means_SDs_1$nTotal==data_clean$nTotal[i_trial] & means_SDs_1$true_ratio==data_clean$true_ratio[i_trial]]) <= 
+                                          3*means_SDs_1$sd[means_SDs_1$nTotal==data_clean$nTotal[i_trial] & means_SDs_1$true_ratio==data_clean$true_ratio[i_trial]], 1, 0)
+} 
+data_clean <- data_clean[data_clean$trial_filter==1,] 
+
+for(i_trial in 1:length(data_clean$trial_number)) {
+    data_clean$trial_filter[i_trial] <- ifelse(abs(data_clean$estimate2[i_trial] - means_SDs_2$estimate2[means_SDs_2$nTotal==data_clean$nTotal[i_trial] & means_SDs_2$true_ratio==data_clean$true_ratio[i_trial]]) <= 
+                                          3*means_SDs_2$sd[means_SDs_2$nTotal==data_clean$nTotal[i_trial] & means_SDs_2$true_ratio==data_clean$true_ratio[i_trial]], 1, 0)
+} 
+data_clean <- data_clean[data_clean$trial_filter==1,] 
+# - 137 = 4042 trials
+
+# vii. trials on which E2 is not a stay, compromise or copy of E1 and P
+# does participant move away from peer estimate? (wrong direction)
+data_clean <- data_clean[data_clean$s >= 0,] # - 20 = 3955 trials
+# does participant move even further than peer estimate? 
+data_clean <- data_clean[data_clean$s <= 1,] # - 18 = 3937 trials
+
+# how many trials per person per condition left?
+trials_pp_pc <- data_clean %>% 
+  group_by(nTotal, confidence_peer) %>%
+  dplyr::count(sID) # lowest = 4 
+
+```
+
+```{r strategies per participant, warning=FALSE, fig.width=25, fig.height=50}
+
+
+data_clean$run <- as.factor(data_clean$run)
+data_clean%>%
+  select(sID, run, strategy)%>%
+  group_by(sID, run, strategy)%>%
+  dplyr::summarise(n = n())%>%
+  dplyr::mutate(strategy_freq=n/sum(n))%>%
+  ggplot(aes(x=forcats::fct_reorder(run, strategy_freq, .desc =FALSE), 
+             y=strategy_freq, 
+             fill=factor(strategy, levels=c("copy", "compromise", "stay"))))+ 
+  facet_wrap(vars(sID),ncol = 8) +
+  geom_bar(position="stack", 
+           stat="identity",  
+           width=0.5, 
+           alpha=0.85) +
+  scale_fill_manual(values = c("copy"="#01665E", "compromise"="#35978F", "stay"="#80CDC1", "other"="#C7EAE5"), 
+                    name="strategy")+
+  ylab("relative frequency")+
+  xlab("run")+
+  labs(fill="strategy")+
+  geom_text(aes(label=scales::percent(strategy_freq, accuracy=1L), 
+                y=strategy_freq), 
+            position=position_fill(vjust=0.5),
+            size=6) +
+  scale_x_discrete(labels=c("1" = "1", "2" = "2", "3" = "3"), limits=c("1","2","3")) +
+  theme_classic(base_size = 16) 
+
+# viii. Exclude participants with S = 0 (stay) on more than 70% of trials
+freq_strategies <- data_clean%>%
+  select(sID, strategy)%>%
+  group_by(sID, strategy)%>%
+  dplyr::summarise(n = n())%>%
+  dplyr::mutate(strategy_freq=n/sum(n))
+to_exclude <- freq_strategies$sID[freq_strategies$strategy=="stay" & freq_strategies$strategy_freq>0.70] # 202, 215, 216, 246, 306, 337
+data_clean <- data_clean[!data_clean$sID %in% to_exclude,] # -6 participants; # - 327 = 3610 trials
+
+# how many participants left?
+length(unique(data_clean$sID)) # 64
+
+
+
+```
+
+```{r preprocess mushroom data with almost all data for fmri analysis, fig.width=25, fig.height=40}
+
+# EXCLUSIONS
+
+# i. qualitatively check if they adhered to task instructions
+    # E1
+    summ <- summarySE(mushroomdata, measurevar="estimate1", groupvars=c("seen_ratio", "nTotal", "sID")) # summarize data to retrieve mean and SE
+    ggplot(data = summ, aes(x = seen_ratio, y = estimate1, color = as.factor(nTotal))) +
+      facet_wrap(vars(sID),ncol = 8) +
+      geom_abline(intercept = 0, slope = 100) +
+      geom_abline(intercept = 50, slope = 0) +
+      geom_jitter(data = mushroomdata, alpha=0.5, width = 0.01, height = 0.01) +
+      geom_smooth(method = "lm") +
+      coord_cartesian(ylim=c(0,100)) +
+      scale_color_viridis(discrete=TRUE) +
+      theme_classic(base_size = 16) +
+      ggtitle("estimate 1")
+    
+    
+    # E2
+    summ <- summarySE(mushroomdata, measurevar="estimate2", groupvars=c("seen_ratio", "nTotal", "sID")) # summarize data to retrieve mean and SE
+    ggplot(data = summ, aes(x = seen_ratio, y = estimate2, color = as.factor(nTotal))) +
+      facet_wrap(vars(sID),ncol = 8) +
+      geom_abline(intercept = 0, slope = 100) +
+      geom_abline(intercept = 50, slope = 0) +
+      geom_jitter(data = mushroomdata, alpha=0.5, width = 0.01, height = 0.01) +
+      geom_smooth(method = "lm") +
+      coord_cartesian(ylim=c(0,100)) +
+      scale_color_viridis(discrete=TRUE) +
+      theme_classic(base_size = 16) +
+      ggtitle("estimate 2")
+
+to_exclude <- c() # qualitative check by Lieke Hofmans
+data_clean_allTrials <- mushroomdata[!mushroomdata$sID %in% to_exclude,] 
+
+# ii. filler trials
+# Do not exclude these trials 
+
+# iii. trials where they were too late or where either estimate 1 or estimate 2 RT > 20 sec
+# Do not exclude these trials
+
+# iv. trials with either estimate 1 or estimate 2 RT < 0.2 sec.
+# Do not exclude these trials
+
+# v. trials without suitable social info (suitable = 15-18 mushrooms from estimate 1, but could be slightly lower (13-14) in case E1 was very close to 0  or 1)
+# Do not exclude these trials
+
+
+# vi. trials with either estimate 1 or estimate 2 > 3SD from mean, grouped per certainty level and ratio
+# Do not exclude these trials
+
+# vii. trials on which E2 is not a stay, compromise or copy of E1 and P
+# Do not exclude these trials
+
+# viii. Exclude participants with S = 0 (stay) on more than 70% of trials 
+# use stricter dataset
+to_exclude <- c(202, 215, 216, 246, 306, 337)
+data_clean_allTrials <- data_clean_allTrials[!data_clean_allTrials$sID %in% to_exclude,] # -6 participants 
+
+# how many participants left?
+length(unique(data_clean_allTrials$sID)) # 64
+
+```
+
+```{r preprocess mushroom data without excluding s < 0, fig.width=25, fig.height=40}
+
+# EXCLUSIONS
+
+# i. qualitatively check if they adhered to task instructions
+to_exclude <- c() # qualitative check by Lieke Hofmans
+data_clean_include_anticonformity <- mushroomdata[!mushroomdata$sID %in% to_exclude,] 
+
+# ii. filler trials
+data_clean_include_anticonformity <- data_clean_include_anticonformity[data_clean_include_anticonformity$filler_trial==0,] 
+
+# iii. trials where they were too late or where either estimate 1 or estimate 2 RT > 20 sec
+data_clean_include_anticonformity$estimate1_rt <- as.numeric(data_clean_include_anticonformity$estimate1_rt)
+data_clean_include_anticonformity$estimate2_rt <- as.numeric(data_clean_include_anticonformity$estimate2_rt)
+data_clean_include_anticonformity <- data_clean_include_anticonformity[!is.na(data_clean_include_anticonformity$estimate2_rt),] # 1 trial, trials = 4199
+data_clean_include_anticonformity <- data_clean_include_anticonformity[data_clean_include_anticonformity$estimate1_rt <= 20 & data_clean_include_anticonformity$estimate2_rt <= 20,] # - 20 = 4179 trials
+
+# iv. trials with either estimate 1 or estimate 2 RT < 0.2 sec.
+data_clean_include_anticonformity <- data_clean_include_anticonformity[data_clean_include_anticonformity$estimate1_rt >= 0.2 & data_clean_include_anticonformity$estimate2_rt >= 0.2,] # - 0 = 4179 trials
+
+# v. trials without suitable social info (suitable = 15-18 mushrooms from estimate 1, but could be slightly lower (13-14) in case E1 was very close to 0  or 1)
+data_clean_include_anticonformity <- data_clean_include_anticonformity[abs(data_clean_include_anticonformity$estimate1 - data_clean_include_anticonformity$estimate_peer) > 12 & abs(data_clean_include_anticonformity$estimate1 - data_clean_include_anticonformity$estimate_peer) < 19,] # - 8 = 4171 trials
+
+
+# vi. trials with either estimate 1 or estimate 2 > 3SD from mean, grouped per certainty level and ratio
+means_SDs_1 <- summarySE(data_clean_include_anticonformity, measurevar="estimate1", groupvars=c("nTotal", "true_ratio"))
+means_SDs_2 <- summarySE(data_clean_include_anticonformity, measurevar="estimate2", groupvars=c("nTotal", "true_ratio"))
+
+for(i_trial in 1:length(data_clean_include_anticonformity$trial_number)) {
+    data_clean_include_anticonformity$trial_filter[i_trial] <- ifelse(abs(data_clean_include_anticonformity$estimate1[i_trial] - means_SDs_1$estimate1[means_SDs_1$nTotal==data_clean_include_anticonformity$nTotal[i_trial] & means_SDs_1$true_ratio==data_clean_include_anticonformity$true_ratio[i_trial]]) <= 
+                                          3*means_SDs_1$sd[means_SDs_1$nTotal==data_clean_include_anticonformity$nTotal[i_trial] & means_SDs_1$true_ratio==data_clean_include_anticonformity$true_ratio[i_trial]], 1, 0)
+} 
+data_clean_include_anticonformity <- data_clean_include_anticonformity[data_clean_include_anticonformity$trial_filter==1,] 
+
+for(i_trial in 1:length(data_clean_include_anticonformity$trial_number)) {
+    data_clean_include_anticonformity$trial_filter[i_trial] <- ifelse(abs(data_clean_include_anticonformity$estimate2[i_trial] - means_SDs_2$estimate2[means_SDs_2$nTotal==data_clean_include_anticonformity$nTotal[i_trial] & means_SDs_2$true_ratio==data_clean_include_anticonformity$true_ratio[i_trial]]) <= 
+                                          3*means_SDs_2$sd[means_SDs_2$nTotal==data_clean_include_anticonformity$nTotal[i_trial] & means_SDs_2$true_ratio==data_clean_include_anticonformity$true_ratio[i_trial]], 1, 0)
+} 
+data_clean_include_anticonformity <- data_clean_include_anticonformity[data_clean_include_anticonformity$trial_filter==1,] 
+# - 137 = 4042 trials
+
+# vii. trials on which E2 is not a stay, compromise or copy of E1 and P
+# does participant move away from peer estimate? (wrong direction)
+
+
+# does participant move even further than peer estimate? 
+
+# how many trials per person per condition left?
+trials_pp_pc <- data_clean_include_anticonformity %>% 
+  group_by(nTotal, confidence_peer) %>%
+  dplyr::count(sID) # lowest = 4 
+
+# viii. Exclude participants with S = 0 (stay) on more than 70% of trials 
+# use stricter dataset
+to_exclude <- c(202, 215, 216, 246, 306, 337)
+data_clean_include_anticonformity <- data_clean_include_anticonformity[!data_clean_include_anticonformity$sID %in% to_exclude,] # 
+
+# how many participants left?
+length(unique(data_clean_include_anticonformity$sID)) # 64
+
+```
+
+```{r create summary data}
+# create participant wise data for mean S (overall and per condition)
+
+mushroom_summ_condition <- data_clean %>%
+  group_by(sID, nTotal, confidence_peer) %>%
+  summarise_at(vars(s), list(s = ~ mean(., na.rm = TRUE)))
+
+mushroom_summ_participant <- mushroom_summ_condition %>%
+  group_by(sID) %>%
+  summarise_at(vars(s), list(s = ~ mean(., na.rm = TRUE)))
+
+```
+
+
+
+```{r plots}
+
+# histogram of estimates at E1
+ggplot(data = data_clean, aes(x = estimate1)) +
+  geom_histogram(binwidth = 6.25, color = "black", fill = "grey") + 
+  scale_x_continuous(breaks = unique(data_clean$true_ratio)*100, limits = c(-10,110)) +
+  theme_classic(base_size = 16) +
+  ggtitle("estimate 1")
+
+# Do participants' estimates at E1 align with the seen ratio?
+summ <- summarySE(data_clean, measurevar="estimate1", groupvars=c("seen_ratio", "nTotal")) # summarize data to retrieve mean and SE
+ggplot(data = summ, aes(x = seen_ratio, y = estimate1, color = as.factor(nTotal))) +
+  geom_abline(intercept = 0, slope = 100) +
+  geom_jitter(data = data_clean, size=2, alpha=0.3, width = 0.01, height = 0.01) +
+  geom_smooth(method = "lm") +
+  geom_point(size=4) +
+  geom_errorbar(aes(ymin=estimate1-se, ymax=estimate1+se), width=.05, size=1) + 
+  scale_color_viridis(discrete=TRUE) +
+  theme_classic(base_size = 16) +
+  ggtitle("estimate 1")
+
+# histogram of s (trialwise)
+ggplot(data = data_clean, aes(x=s)) +
+  geom_histogram(fill="grey", color = "black") +
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(s)), size = 1, color = "red") +
+  xlab("social information use (s)")
+
+# histogram of mean s per participant
+ggplot(data = mushroom_summ_participant, aes(x=s)) +
+  geom_histogram(fill="grey", color = "black") +
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(s)), size = 1, color = "red") +
+  xlab("mean social information use (S)")
+
+# Relationship certainty level and self-reported confidence
+summ <- summarySE(prac_summ, measurevar="confidence_rating", groupvars=c("nTotal")) 
+ggplot(data = summ, aes(x = as.factor(nTotal), y = confidence_rating)) +
+  geom_jitter(data = prac_summ, alpha=0.1, color = "darkblue", width = 0.05, height = 0.05) +
+  geom_point(size=1, color = "red") +
+  geom_errorbar(aes(ymin=confidence_rating-se, ymax=confidence_rating+se), width=0.1, size = 0.5, color = "red") +
+  theme_classic(base_size = 16)
+
+
+```
+```{r update exclusion file}
+
+participants_to_exclude$exclude_mushroom <- participants_to_exclude$exclude_beh
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 202
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 215
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 216
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 246
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 306
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+participants_to_exclude[nrow(participants_to_exclude)+1, ] <- NA
+participants_to_exclude$exclude_mushroom[nrow(participants_to_exclude)] <- 337
+participants_to_exclude$reason[nrow(participants_to_exclude)] <- ">70% stay trials"
+
+participants_to_exclude$exclude_fmri <- ifelse(is.na(participants_to_exclude$exclude_fmri), participants_to_exclude$exclude_mushroom, participants_to_exclude$exclude_fmri)
+
+participants_to_exclude <- participants_to_exclude %>% relocate(reason, .after = last_col())
+```
+
+```{r save data}
+if (!isTRUE(file.info(derivatives_mushroom_dir)$isdir)) dir.create(derivatives_mushroom_dir, recursive = TRUE)
+write_csv(data_clean, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-trialwise.csv"))
+write_csv(data_clean_allTrials, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-trialwise_allTrials.csv"))
+write_csv(data_clean_include_anticonformity, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-trialwise_include_anticonformity.csv"))
+
+write_csv(mushroom_summ_condition, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-participantconditionwise.csv"))
+write_csv(mushroom_summ_participant, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-participantwise.csv"))
+
+write_csv(pracdata, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-practice_trialwise.csv"))
+write_csv(prac_summ, file.path(derivatives_mushroom_dir, "group_task-mushroom_preproc-practice.csv"))
+
+write_csv(participants_to_exclude, file.path(analysis_dir, "participants_to_exclude.csv"))
+```
+
+
+
+

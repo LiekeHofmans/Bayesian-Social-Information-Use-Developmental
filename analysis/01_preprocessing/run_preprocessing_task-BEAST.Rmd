@@ -1,0 +1,88 @@
+---
+title: "run_preprocessing_task-BEAST"
+author: "Lieke Hofmans"
+date: "2023-07-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warnings = FALSE)
+
+# packages
+list.of.packages <- c("tidyverse", "dplyr", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(zoo)
+
+# directories
+project_wd <- "P:/fMRI Projects/fMRI Project Mushroom Highschool"
+setwd(project_wd)
+
+analysis_dir <- file.path(project_wd, "analysis")
+bids_dir <- file.path(project_wd, "bids")
+bids_group_dir <- file.path(bids_dir, "group")
+derivatives_beast_dir <- file.path(bids_dir, "derivatives/beh/BEAST")
+
+# import data
+BEASTdata <- read.csv(file.path(bids_group_dir, "group_task-BEAST.csv"))
+participants_to_exclude <- read.csv(file.path(analysis_dir, "participants_to_exclude.csv"))
+
+```
+
+```{r preprocess BEAST}
+
+# copy data that is only on 1 row to all rows for that participant (confidence judgements and bonus)
+BEASTdata$confidence_estimate <- na.locf(BEASTdata$confidence_estimate, fromLast = TRUE)
+BEASTdata$confidence_revise <- na.locf(BEASTdata$confidence_revise, fromLast = TRUE)
+BEASTdata$bonus_amount <- na.locf(BEASTdata$bonus_amount, fromLast = TRUE)
+
+# define social information use s
+BEASTdata$s <- (BEASTdata$estimate_revised - BEASTdata$estimate) / (BEASTdata$social_info - BEASTdata$estimate) 
+
+# Exclude data
+# Exclude predefined participants
+BEASTdata <- BEASTdata[!BEASTdata$sID %in% participants_to_exclude$exclude_beh,]
+total_trials <- nrow(BEASTdata)
+total_n <- length(unique(BEASTdata$sID))
+
+# exclude trials for which s < 0 or s > 1
+BEASTdata <- BEASTdata[BEASTdata$s >= 0 & BEASTdata$s <= 1,]
+s_ok_trials <- nrow(BEASTdata)
+s_ok_trials_n <- length(unique(BEASTdata$sID))
+
+# exclude participants with fewer than 3 trials
+BEASTdata <- BEASTdata %>%
+  group_by(sID) %>% 
+  filter(n() >= 3) %>%
+  ungroup()
+included_n <- length(unique(BEASTdata$sID))
+
+# histogram of s 
+ggplot(data = BEASTdata, aes(x = s)) +
+  geom_histogram(binwidth = 0.05, color = "black", fill = "grey") + 
+  coord_cartesian(xlim=c(0,1)) +
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(s)), size = 1, color = "red") +
+  xlab("social information use (s)")
+
+# histogram of mean S
+BEASTsumm <- BEASTdata %>%
+  group_by(sID) %>%
+  summarise_at(vars(s, time_estimate, time_revise, confidence_estimate, confidence_revise), list(mean = ~ mean(., na.rm = TRUE)))
+ggplot(data = BEASTsumm, aes(x = s_mean)) +
+  geom_histogram(binwidth = 0.05, color = "black", fill = "grey") + 
+  coord_cartesian(xlim=c(0,1)) +
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(s_mean)), size = 1, color = "red") +
+  xlab("mean social information use (S)")
+
+# save data
+if (!isTRUE(file.info(derivatives_beast_dir)$isdir)) dir.create(derivatives_beast_dir, recursive = TRUE)
+write_csv(BEASTdata, file.path(derivatives_beast_dir, "group_task-BEAST_preproc-trialwise.csv"))
+write_csv(BEASTsumm, file.path(derivatives_beast_dir, "group_task-BEAST_preproc-participantwise.csv"))
+
+```

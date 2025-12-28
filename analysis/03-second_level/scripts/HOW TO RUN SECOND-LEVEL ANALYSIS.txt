@@ -1,0 +1,7 @@
+HOW TO RUN SECOND-LEVEL ANALYSIS
+
+Run batch_2ndLevel.sh in the terminal
+Within this script, you can define which steps you want to run:
+- running the actual analysis: this requires the .fsf files, which include all the parameters to run the GLMs
+- running the quality assessment: the results should be checked manually.
+

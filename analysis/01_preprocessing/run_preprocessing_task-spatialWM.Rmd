@@ -1,0 +1,100 @@
+---
+title: "run_preprocessing_task-spatialWM"
+author: "Lieke Hofmans"
+date: "2023-07-05"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warnings = FALSE)
+
+# packages
+list.of.packages <- c("tidyverse", "dplyr", "ggplot2", "tidyr", "readr")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readr)
+
+
+# directories
+project_wd <- "P:/fMRI Projects/fMRI Project Mushroom Highschool"
+setwd(project_wd)
+
+analysis_dir <- file.path(project_wd, "analysis")
+bids_dir <- file.path(project_wd, "bids")
+bids_group_dir <- file.path(bids_dir, "group")
+derivatives_spatialWM_dir <- file.path(bids_dir, "derivatives/beh/spatialWM")
+
+```
+
+```{r import data, include=FALSE}
+
+# import which participants need to be excluded
+participants_to_exclude <- read.csv(file.path(analysis_dir, "participants_to_exclude.csv"))
+
+# import spatial working memory data
+list_subjects <- list.dirs(path = bids_dir, full.names = TRUE, recursive = FALSE)
+list_subjects <- list_subjects[grepl(".*sub-[2-8][0-9]{2}", list_subjects)]
+df_all <- data.frame()
+
+for (iSubject in list_subjects){
+  WMfile <- list.files(path = file.path(iSubject, "beh"), pattern = "sub-.*_task-spatialWM_beh.csv", full.names = TRUE)
+  if (length(WMfile) > 0) {
+    if (file.size(WMfile) > 2000){
+      WMdata <- read.csv(WMfile)
+      # keep only rows with behavioral task data
+      WMdata <- WMdata[!is.na(WMdata$trials.thisRepN),]
+      # keep only columns with relevant behavioral task data
+      WMdata_filtered <- WMdata[,c("response_times", "correct_order", "click_order", "response_correct")]
+      WMdata_filtered <- cbind(sID = unique(WMdata$participant), trialNumber = c(1:nrow(WMdata_filtered)), WMdata_filtered)
+      df_all <- rbind(df_all, WMdata_filtered)
+    }
+  }
+} 
+WMdata <- df_all[!df_all$sID %in% participants_to_exclude$exclude_beh,]
+
+
+```
+
+```{r preprocess WM data}
+
+# define WM score
+WMsumm <- data.frame(matrix(ncol = 2, nrow = length(unique(WMdata$sID))))
+colnames(WMsumm) <- c("sID", "WM_score")
+
+n_row <- 1
+for (iSubject in unique(WMdata$sID)){
+    subject_data <- WMdata[WMdata$sID == iSubject,]
+    row_lastCorrect <- tail(which(subject_data$response_correct == "True"), n = 1)
+    correct_order <- subject_data$correct_order[row_lastCorrect]
+    WM_score <- length(as.list(strsplit(correct_order, ", ")[[1]]))
+    
+    WMsumm$sID[n_row] <- iSubject
+    WMsumm$WM_score[n_row] <- WM_score
+    n_row <- n_row + 1
+
+}
+
+# histogram of WM score
+ggplot(data = WMsumm, aes(x = WM_score)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "grey") + 
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(WM_score)), size = 1, color = "red") +
+  xlab("spatial working memory score")
+
+```
+
+
+```{r save data}
+# save data
+if (!isTRUE(file.info(derivatives_spatialWM_dir)$isdir)) dir.create(derivatives_spatialWM_dir, recursive = TRUE)
+write_csv(WMdata, file.path(derivatives_spatialWM_dir, "group_task-spatialWM_preproc-trialwise.csv"))
+write_csv(WMsumm, file.path(derivatives_spatialWM_dir, "group_task-spatialWM_preproc-participantwise.csv"))
+
+
+`````

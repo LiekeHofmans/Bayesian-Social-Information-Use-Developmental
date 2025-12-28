@@ -1,0 +1,116 @@
+---
+title: "run_preprocessing_qnr-socialmedia"
+author: "Lieke Hofmans"
+date: "2022-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warnings = FALSE)
+
+# packages
+list.of.packages <- c("tidyverse", "dplyr", "ggplot2", "stringi")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(ggplot2)
+library(stringi)
+library(dplyr)
+
+# directories
+project_wd <- "P:/fMRI Projects/fMRI Project Mushroom Highschool"
+setwd(project_wd)
+
+analysis_dir <- file.path(project_wd, "analysis")
+bids_dir <- file.path(project_wd, "bids")
+bids_group_dir <- file.path(bids_dir, "group")
+derivatives_socialmedia_dir <- file.path(bids_dir, "derivatives/qnr/socialmedia")
+derivatives_demographics_dir <- file.path(bids_dir, "derivatives/qnr/demographics")
+
+# import data
+qnrdata <- read.csv(file.path(bids_group_dir, "group_qnr-socialmedia.csv"))
+participants_to_exclude <- read.csv(file.path(analysis_dir, "participants_to_exclude.csv"))
+qnrdata <- qnrdata[!qnrdata$sID %in% participants_to_exclude$exclude_beh,]
+
+```
+
+
+```{r create demographics dataset}
+demographics <- qnrdata[,c("sID", "test_delay_days", "gender", "age", "education")]
+```
+
+```{r create social media dataset}
+
+# Convert list of social contacts to number (count)
+qnrdata <- qnrdata %>%
+  rowwise() %>%
+  mutate(DBNR = length(str_split(DBNR, ",|\\.")[[1]])) %>%
+  mutate(NSSQ = length(str_split(NSSQ, ",|\\.")[[1]]))
+
+
+
+# calculate total CIUS score
+qnrdata$CIUS_total <- rowSums(select(qnrdata, c(CIUS_1:CIUS_14)), na.rm = FALSE) 
+
+# histogram of CIUS score
+ggplot(data = qnrdata[,!is.na("CIUS_total")], aes(x = CIUS_total)) +
+  geom_histogram(binwidth = 2, color = "black", fill = "grey") + 
+  coord_cartesian(xlim=c(14,70)) +
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(CIUS_total, na.rm=T)), size = 1, color = "red") +
+  xlab("compulsive social media use score")
+
+
+# calculate subscale DYMI scores
+qnrdata$AutonomyChoice_score <- rowMeans(select(qnrdata, matches("autonomy_c")), na.rm = FALSE) # to be reversed
+qnrdata$AutonomyWithin_score <- rowMeans(select(qnrdata, matches("autonomy_w")), na.rm = FALSE) 
+qnrdata$Literacy_score <- rowMeans(select(qnrdata, matches("literacy")), na.rm = FALSE) 
+qnrdata$Growth_score <- rowMeans(select(qnrdata, matches("growth")), na.rm = FALSE)
+qnrdata$Risk_score <- rowMeans(select(qnrdata, matches("risk")), na.rm = FALSE) 
+qnrdata$EmoNeg_score <- rowMeans(select(qnrdata, matches("emotion_n")), na.rm = FALSE) # to be reversed
+qnrdata$EmoAgg_score <- rowMeans(select(qnrdata, matches("emotion_a")), na.rm = FALSE) # to be reversed
+qnrdata$Support_score <- rowMeans(select(qnrdata, matches("support")), na.rm = FALSE)
+qnrdata$Respect_score <- rowMeans(select(qnrdata, matches("respect")), na.rm = FALSE) 
+qnrdata$Citizenship_score <- rowMeans(select(qnrdata, matches("citizenship")), na.rm = FALSE) 
+
+# reverse scores if needed
+qnrdata$AutonomyChoice_score <- 5 - qnrdata$AutonomyChoice_score + 1
+qnrdata$EmoNeg_score <- 5 - qnrdata$EmoNeg_score + 1
+qnrdata$EmoAgg_score <- 5 - qnrdata$EmoAgg_score + 1
+
+# calculate total and average DYMI score
+DYMI_weightings <- c(9.91, 9.39, 10.17, 10.43, 11.73, 10.30, 9.91, 9.39, 10.30, 8.47)
+qnrdata$DYMI_total <- rowSums(t(t(select(qnrdata, c(AutonomyChoice_score:Citizenship_score))) * DYMI_weightings), na.rm=FALSE)
+qnrdata$DYMI_average <- rowMeans(select(qnrdata, c(AutonomyChoice_score:Citizenship_score)), na.rm = FALSE) 
+
+# histogram of DYMI score
+ggplot(data = qnrdata, aes(x = DYMI_total)) +
+  geom_histogram(binwidth = 5, color = "black", fill = "grey") + 
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(DYMI_total, na.rm=T)), size = 1, color = "red") +
+  xlab("DYMI total score")
+
+ggplot(data = qnrdata, aes(x = DYMI_average)) +
+  geom_histogram(color = "black", fill = "grey") + 
+  theme_classic(base_size = 16) +
+  geom_vline(aes(xintercept = mean(DYMI_average, na.rm=T)), size = 1, color = "red") +
+  xlab("DYMI average score")
+
+
+# create dataset
+socialmediadata <- qnrdata %>% select(sID, NSSQ:MEDIA_USE, MEDIA_USE_twitter:FB1, LifeSatisfaction_1:LifeSatisfaction_6, CIUS_total:DYMI_average)
+
+```
+
+
+```{r save data}
+
+if (!isTRUE(file.info(derivatives_demographics_dir)$isdir)) dir.create(derivatives_demographics_dir, recursive = TRUE)
+write_csv(demographics, file.path(derivatives_demographics_dir, "group_demographics.csv"))
+
+if (!isTRUE(file.info(derivatives_socialmedia_dir)$isdir)) dir.create(derivatives_socialmedia_dir, recursive = TRUE)
+write_csv(socialmediadata, file.path(derivatives_socialmedia_dir, "group_socialmedia.csv"))
+```
+
+

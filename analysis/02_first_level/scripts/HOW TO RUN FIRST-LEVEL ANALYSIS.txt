@@ -1,0 +1,10 @@
+HOW TO RUN FIRST-LEVEL ANALYSIS
+
+Run batch_1stLevel.sh in the terminal
+Within this script, you can define which steps you want to run:
+- mounting a folder onto the network
+- creating timing files for all the relevant fMRI events
+- creating the nuisance regressors as control variables
+- running the actual analysis: this requires the .fsf files, which include all the parameters to run the GLMs
+- running the quality assessment: the results should be checked manually.
+
