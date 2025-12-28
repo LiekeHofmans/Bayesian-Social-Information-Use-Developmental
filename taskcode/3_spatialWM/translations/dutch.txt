@@ -1,0 +1,61 @@
+
+INSTRUCTIONS_TXT_1 = (
+	"In dit spel zie je een aantal boxen.\n\n"
+	"De boxen zullen in een bepaalde volgorde oplichten. "
+	"Het is aan jou om de volgorde waarin ze oplichten te onthouden. "
+	"Zodra ze stoppen met oplichten "
+	"is het jouw taak om in diezelfde volgorde op de boxen te klikken.\n\n"
+	"Gebruik de linker muisknop om op de boxen te klikken."
+)
+
+# first instructions screen 'continue' message
+# "Click here to see an example"
+INSTRUCTIONS_CONTINUE_TXT = (
+	"Klik hier om een voorbeeld te zien"
+)
+
+# placement of instructions screens' 'continue' messages,
+# (x, y) coordinates in degrees
+INSTRUCTIONS_CONTINUE_TXT_PLACEMENT = (0, -10)
+
+# practice trial instructions, shown after light-up
+# sequence has been demonstrated
+# "Click the boxes in the order that they lit up"
+PRACTICE_TXT = (
+	"Klik op de boxen in de volgorde waarin ze oplichtten"
+)
+
+# placement of practice trial instructions,
+# (x, y) coordinates in degrees
+# (the default is to place the text just below the
+# target area)
+PRACTICE_TXT_PLACEMENT = (
+	0, -(AREA_HEIGHT_DEG/2 + TXT_SIZE_M*3)
+)
+
+# experiment instructions, second instructions screen
+# "Throughout the experiment the number of boxes that 
+# light up will increase. Answer as correctly as possible.\n\n
+# The test takes about 5-15 minutes. You will be shown a message 
+# when you are finished."
+INSTRUCTIONS_TXT_2 = (
+	"Gedurende het spel zal het aantal boxen dat oplicht groter worden. "
+	"Antwoord zo correct mogelijk.\n\n"
+	"Het spel duurt ongeveer 5 tot 10 minuten. "
+	"Je krijgt op het scherm te zien wanneer je klaar bent."
+)
+
+# second instructions screen 'continue'/'start experiment' message
+# "Click here to start the experiment"
+INSTRUCTIONS_START_TXT = (
+	"Klik hier om het spel te starten"
+)
+
+# end screen message
+# "You've finished the experiment.\n\n
+# Thank you for your participation!"
+END_TXT = (
+	"Je bent klaar met het spel.\n\n"
+	"Bedankt voor je deelname!"
+)
+
