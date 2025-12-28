@@ -1,0 +1,52 @@
+---
+title: "checkPracticePerformance"
+author: "Lieke Hofmans"
+date: "11/23/2021"
+output: html_document
+---
+
+```{r, warning = FALSE, fig.width=5, fig.height=4}
+# required package and function
+library("ggplot2")
+library("plyr")
+source("summary_function.R")
+
+# directories and files
+dataDir <- "../../../raw_data/"
+allSubjects <- file.info(list.files(path = dataDir, pattern = "^sub-.{3}", full.names = T))
+selected_subject <- rownames(allSubjects)[which.max(allSubjects$mtime)] # newest participant
+allFiles <- file.info(list.files(path = file.path(selected_subject, "mushroom"), pattern = "^sub-.{3}_task-mushroom_run-prac_beh(.*).csv", full.names = T))
+selected_file <- rownames(allFiles)[which.max(allFiles$mtime)] # newest datafile
+
+datafile <- read.csv(selected_file, check.names = FALSE, encoding = "UTF-8", header = T)
+# if for some reason it doesnt pick te right file, manually fill it in here below, inside the double quotes: 
+# datafile <- read.csv("")
+colnames(datafile)[1] <- "nTotal" # to remove byte order mark from beginning of first column name
+sID <- sub("_task.*", "", sub(".*mushroom/", "", selected_file))
+
+# plot performance as a function of ratio and certainty level
+# E1 (most important graph)
+summ <- summarySE(datafile, measurevar="estimation1.rating", groupvars=c("seen_ratio", "nTotal")) # summarize data to retrieve mean and SE
+ggplot(data = summ, aes(x = seen_ratio, y = estimation1.rating, color = as.factor(nTotal))) +
+  geom_abline(intercept = 0, slope = 100) +
+  geom_abline(intercept = 50, slope = 0) +
+  geom_jitter(data = datafile, alpha=0.5, width = 0.01, height = 0.01, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, size = 1.5) +
+  coord_cartesian(ylim=c(0,100), xlim=c(0,1)) +
+  theme_classic(base_size = 16) +
+  labs(title=paste(sID, ": Estimate 1", sep = ""), x ="seen ratio", y = "estimate", color = "nTotal")
+  
+
+# E2 (just in case you also want to check estimates at phase 2)
+summ <- summarySE(datafile, measurevar="estimation2.rating", groupvars=c("seen_ratio", "nTotal")) # summarize data to retrieve mean and SE
+ggplot(data = summ, aes(x = seen_ratio, y = estimation2.rating, color = as.factor(nTotal))) +
+  geom_abline(intercept = 0, slope = 100) +
+  geom_abline(intercept = 50, slope = 0) +
+  geom_jitter(data = datafile, alpha=0.5, width = 0.01, height = 0.01, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, size = 1.5) +
+  coord_cartesian(ylim=c(0,100), xlim=c(0,1)) +
+  theme_classic(base_size = 16) +
+  labs(title=paste(sID, ": Estimate 2", sep = ""), x ="seen ratio", y = "estimate", color = "nTotal")
+
+```
+
